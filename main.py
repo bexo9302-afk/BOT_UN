@@ -35,7 +35,6 @@ def load_data():
     except Exception as e:
         print(f"خطأ في تحميل البيانات: {e}")
     
-    # بيانات افتراضية
     return {
         'schedule': None,
         'subjects': {
@@ -55,7 +54,6 @@ def save_data(data):
     except Exception as e:
         print(f"خطأ في حفظ البيانات: {e}")
 
-# تحميل البيانات
 data = load_data()
 user_state = {}
 current_user_id = None
@@ -71,9 +69,8 @@ def main_menu():
         InlineKeyboardButton("❓ مساعدة", callback_data="help")
     ]
     
-    # إضافة زر الأدمن إذا كان المستخدم أدمن
     if current_user_id == ADMIN_ID:
-        buttons.append(InlineKeyboardButton("⚙️ لوحة التحكم", callback_data="admin"))
+        buttons.append(InlineKeyboardButton("⚙️ تحكم الأدمن", callback_data="admin"))
     
     keyboard.add(*buttons)
     return keyboard
@@ -81,10 +78,8 @@ def main_menu():
 def subjects_menu():
     """قائمة المواد"""
     keyboard = InlineKeyboardMarkup(row_width=1)
-    
     for sid, name in SUBJECTS.items():
         keyboard.add(InlineKeyboardButton(name, callback_data=f"sub_{sid}"))
-    
     keyboard.add(InlineKeyboardButton("🔙 رجوع", callback_data="main"))
     return keyboard
 
@@ -123,12 +118,7 @@ def start(message):
     current_user_id = message.from_user.id
     
     welcome_text = f"""
-🎓 مرحباً بك {message.from_user.first_name} في بوت كلية نظم المعلومات - كورس ثاني
-
-هذا البوت يساعدك في:
-📚 تحميل المحاضرات والملخصات
-📅 مشاهدة الجدول الدراسي
-📋 تحميل الواجبات
+🎓 مرحباً بك {message.from_user.first_name} في بوت كلية نظم المعلومات
 
 اختر ما تريد من القائمة:
     """
@@ -162,49 +152,51 @@ def callback_handler(call):
     message_id = call.message.message_id
     user_id = call.from_user.id
     
-    # القوائم العامة
-    if call.data == "main":
-        bot.edit_message_text(
-            "🎓 القائمة الرئيسية",
-            chat_id,
-            message_id,
-            reply_markup=main_menu()
-        )
-    
-    elif call.data == "subjects":
-        bot.edit_message_text(
-            "📚 اختر المادة التي تريدها:",
-            chat_id,
-            message_id,
-            reply_markup=subjects_menu()
-        )
-    
-    elif call.data == "schedule":
-        if data['schedule']:
-            try:
-                bot.send_document(
-                    chat_id,
-                    data['schedule'],
-                    caption="📅 الجدول الدراسي",
-                    reply_markup=main_menu()
-                )
-            except:
+    try:
+        # القوائم العامة
+        if call.data == "main":
+            bot.edit_message_text(
+                "🎓 القائمة الرئيسية",
+                chat_id,
+                message_id,
+                reply_markup=main_menu()
+            )
+        
+        elif call.data == "subjects":
+            bot.edit_message_text(
+                "📚 اختر المادة التي تريدها:",
+                chat_id,
+                message_id,
+                reply_markup=subjects_menu()
+            )
+        
+        elif call.data == "schedule":
+            if data['schedule']:
+                try:
+                    bot.send_document(
+                        chat_id,
+                        data['schedule'],
+                        caption="📅 الجدول الدراسي",
+                        reply_markup=main_menu()
+                    )
+                except:
+                    bot.send_message(
+                        chat_id,
+                        "❌ حدث خطأ في إرسال الجدول"
+                    )
+            else:
                 bot.send_message(
                     chat_id,
-                    "❌ حدث خطأ في إرسال الجدول"
+                    "📅 لا يوجد جدول دراسي بعد",
+                    reply_markup=main_menu()
                 )
-        else:
-            bot.send_message(
-                chat_id,
-                "📅 لا يوجد جدول دراسي بعد"
-            )
-    
-    elif call.data == "help":
-        help_text = """
+        
+        elif call.data == "help":
+            help_text = """
 ❓ مساعدة البوت
 
 📚 المواد الدراسية:
-   اختر المادة ثم اختر:
+   اختر المادة ثم:
    • 📚 محاضرات
    • 📝 ملخصات
    • 📋 واجبات
@@ -213,112 +205,114 @@ def callback_handler(call):
    يعرض الجدول إذا كان متوفر
 
 للتواصل: @YourChannel
-        """
-        bot.send_message(chat_id, help_text)
-    
-    # قوائم المواد
-    elif call.data.startswith("sub_"):
-        subject_id = call.data[4:]
-        bot.edit_message_text(
-            f"📚 {SUBJECTS[subject_id]}",
-            chat_id,
-            message_id,
-            reply_markup=subject_menu(subject_id)
-        )
-    
-    # عرض الملفات
-    elif call.data.startswith("show_"):
-        parts = call.data.split("_")
-        subject_id = parts[1]
-        content_type = parts[2]
+            """
+            bot.send_message(chat_id, help_text, reply_markup=main_menu())
         
-        files = data['subjects'][subject_id][content_type]
-        
-        if not files:
-            content_names = {
-                'lectures': 'محاضرات',
-                'summaries': 'ملخصات',
-                'assignments': 'واجبات'
-            }
-            bot.send_message(
-                chat_id,
-                f"❌ لا توجد {content_names[content_type]} لهذه المادة بعد"
-            )
-        else:
-            for file_name, file_info in files.items():
-                try:
-                    bot.send_document(
-                        chat_id,
-                        file_info['file_id'],
-                        caption=f"📄 {file_name}\n📅 {file_info.get('date', '')}",
-                        reply_markup=main_menu()
-                    )
-                except:
-                    continue
-    
-    # قوائم الأدمن
-    elif user_id == ADMIN_ID:
-        if call.data == "admin":
+        # قوائم المواد
+        elif call.data.startswith("sub_"):
+            subject_id = call.data[4:]
             bot.edit_message_text(
-                "⚙️ لوحة التحكم",
+                f"📚 {SUBJECTS[subject_id]}",
                 chat_id,
                 message_id,
-                reply_markup=admin_menu()
+                reply_markup=subject_menu(subject_id)
             )
         
-        elif call.data == "up_schedule":
-            bot.send_message(
-                chat_id,
-                "📤 أرسل الجدول الدراسي (PDF أو صورة)"
-            )
-            user_state[chat_id] = 'schedule'
-        
-        elif call.data == "up_lecture":
-            bot.send_message(
-                chat_id,
-                "📤 أرسل المحاضرة (PDF)\nاكتب اسم المادة في التعليق"
-            )
-            user_state[chat_id] = 'lecture'
-        
-        elif call.data == "up_summary":
-            bot.send_message(
-                chat_id,
-                "📤 أرسل الملخص (PDF)\nاكتب اسم المادة في التعليق"
-            )
-            user_state[chat_id] = 'summary'
-        
-        elif call.data == "up_assignment":
-            bot.send_message(
-                chat_id,
-                "📤 أرسل الواجب (PDF)\nاكتب اسم المادة في التعليق"
-            )
-            user_state[chat_id] = 'assignment'
-        
-        elif call.data == "stats":
-            total_files = 0
-            for subject in data['subjects'].values():
-                total_files += len(subject['lectures'])
-                total_files += len(subject['summaries'])
-                total_files += len(subject['assignments'])
+        # عرض الملفات
+        elif call.data.startswith("show_"):
+            parts = call.data.split("_")
+            subject_id = parts[1]
+            content_type = parts[2]
             
-            stats_text = f"""
-📊 إحصائيات البوت:
-
-📚 عدد المواد: {len(SUBJECTS)}
-📁 إجمالي الملفات: {total_files}
-📅 الجدول: {'✅ موجود' if data['schedule'] else '❌ غير موجود'}
-
-تفاصيل الملفات:
-            """
+            files = data['subjects'][subject_id][content_type]
             
-            for sid, name in SUBJECTS.items():
-                sub = data['subjects'][sid]
-                stats_text += f"\n{name}:\n"
-                stats_text += f"  📚 محاضرات: {len(sub['lectures'])}\n"
-                stats_text += f"  📝 ملخصات: {len(sub['summaries'])}\n"
-                stats_text += f"  📋 واجبات: {len(sub['assignments'])}\n"
+            if not files:
+                content_names = {
+                    'lectures': 'محاضرات',
+                    'summaries': 'ملخصات',
+                    'assignments': 'واجبات'
+                }
+                bot.send_message(
+                    chat_id,
+                    f"❌ لا توجد {content_names[content_type]} لهذه المادة بعد",
+                    reply_markup=main_menu()
+                )
+            else:
+                for file_name, file_info in files.items():
+                    try:
+                        bot.send_document(
+                            chat_id,
+                            file_info['file_id'],
+                            caption=f"📄 {file_name}\n📅 {file_info.get('date', '')}",
+                            reply_markup=main_menu()
+                        )
+                    except:
+                        continue
+        
+        # قوائم الأدمن
+        elif user_id == ADMIN_ID:
+            if call.data == "admin":
+                bot.edit_message_text(
+                    "⚙️ لوحة التحكم",
+                    chat_id,
+                    message_id,
+                    reply_markup=admin_menu()
+                )
             
-            bot.send_message(chat_id, stats_text)
+            elif call.data == "up_schedule":
+                bot.send_message(
+                    chat_id,
+                    "📤 أرسل الجدول الدراسي (PDF أو صورة)"
+                )
+                user_state[chat_id] = 'schedule'
+            
+            elif call.data == "up_lecture":
+                bot.send_message(
+                    chat_id,
+                    "📤 أرسل المحاضرة (PDF)\nاكتب اسم المادة في التعليق"
+                )
+                user_state[chat_id] = 'lecture'
+            
+            elif call.data == "up_summary":
+                bot.send_message(
+                    chat_id,
+                    "📤 أرسل الملخص (PDF)\nاكتب اسم المادة في التعليق"
+                )
+                user_state[chat_id] = 'summary'
+            
+            elif call.data == "up_assignment":
+                bot.send_message(
+                    chat_id,
+                    "📤 أرسل الواجب (PDF)\nاكتب اسم المادة في التعليق"
+                )
+                user_state[chat_id] = 'assignment'
+            
+            elif call.data == "stats":
+                total_files = 0
+                stats_text = "📊 إحصائيات البوت:\n\n"
+                
+                for sid, name in SUBJECTS.items():
+                    sub = data['subjects'][sid]
+                    lec_count = len(sub['lectures'])
+                    sum_count = len(sub['summaries'])
+                    ass_count = len(sub['assignments'])
+                    total = lec_count + sum_count + ass_count
+                    total_files += total
+                    
+                    stats_text += f"{name}:\n"
+                    stats_text += f"  📚 محاضرات: {lec_count}\n"
+                    stats_text += f"  📝 ملخصات: {sum_count}\n"
+                    stats_text += f"  📋 واجبات: {ass_count}\n\n"
+                
+                stats_text += f"📁 إجمالي الملفات: {total_files}\n"
+                stats_text += f"📅 الجدول: {'✅ موجود' if data['schedule'] else '❌ غير موجود'}"
+                
+                bot.send_message(chat_id, stats_text, reply_markup=admin_menu())
+    
+    except Exception as e:
+        print(f"خطأ في معالجة الزر: {e}")
+        # إذا فشل التعديل، نرسل رسالة جديدة
+        bot.send_message(chat_id, "حدث خطأ، الرجاء المحاولة مرة أخرى", reply_markup=main_menu())
 
 # ==================== استقبال الملفات ====================
 
@@ -331,7 +325,9 @@ def handle_files(message):
     if message.from_user.id != ADMIN_ID:
         return
     
+    # التحقق من وجود حالة
     if chat_id not in user_state:
+        bot.send_message(chat_id, "الرجاء اختيار نوع الملف أولاً من لوحة التحكم")
         return
     
     # تحديد نوع الملف
@@ -352,7 +348,7 @@ def handle_files(message):
     if action == 'schedule':
         data['schedule'] = file_id
         save_data(data)
-        bot.send_message(chat_id, "✅ تم حفظ الجدول بنجاح!")
+        bot.send_message(chat_id, "✅ تم حفظ الجدول بنجاح!", reply_markup=admin_menu())
     
     # حفظ محتوى المواد
     elif action in ['lecture', 'summary', 'assignment']:
@@ -383,33 +379,33 @@ def handle_files(message):
                 
                 bot.send_message(
                     chat_id,
-                    f"✅ تم حفظ {type_names[content_type]} في مادة {subject_name}!"
+                    f"✅ تم حفظ {type_names[content_type]} في مادة {subject_name}!",
+                    reply_markup=admin_menu()
                 )
                 found = True
                 break
         
         if not found:
-            # إذا لم يتم العثور على اسم المادة
             subjects_list = "\n".join([f"• {name}" for name in SUBJECTS.values()])
             bot.send_message(
                 chat_id,
                 f"❌ لم أتمكن من تحديد المادة\n\n"
                 f"المواد المتاحة:\n{subjects_list}\n\n"
-                f"يرجى كتابة اسم المادة في التعليق عند رفع الملف"
+                f"يرجى كتابة اسم المادة في التعليق عند رفع الملف",
+                reply_markup=admin_menu()
             )
     
-    # مسح الحالة
-    del user_state[chat_id]
+    # مسح الحالة بأمان
+    if chat_id in user_state:
+        del user_state[chat_id]
 
 # ==================== تشغيل البوت ====================
 
 @app.route('/')
 def home():
-    """صفحة التأكد من عمل البوت"""
     return "✅ البوت شغال!"
 
 def run_bot():
-    """تشغيل البوت في خيط منفصل"""
     print("✅ البوت يعمل...")
     try:
         bot.infinity_polling()
