@@ -262,7 +262,7 @@ def subject_menu(subject_id):
         InlineKeyboardButton("📚 محاضرات", callback_data=f"show_{subject_id}_lecture"),
         InlineKeyboardButton("📝 ملخصات", callback_data=f"show_{subject_id}_summary"),
         InlineKeyboardButton("📋 واجبات", callback_data=f"show_{subject_id}_assignment"),
-        InlineKeyboardButton("🔙 رجوع", callback_data="subjects")
+        InlineKeyboardButton("رجوع", callback_data="subjects")
     ]
     keyboard.add(*buttons)
     return keyboard
@@ -276,7 +276,7 @@ def admin_menu():
         InlineKeyboardButton("📤 رفع ملخص", callback_data="up_summary"),
         InlineKeyboardButton("📤 رفع واجب", callback_data="up_assignment"),
         InlineKeyboardButton("📊 الإحصائيات", callback_data="stats"),
-        InlineKeyboardButton("🔙 رجوع", callback_data="main")
+        InlineKeyboardButton("رجوع", callback_data="main")
     ]
     keyboard.add(*buttons)
     return keyboard
@@ -296,7 +296,7 @@ def subject_choice_menu(action):
     for key, name in subjects:
         keyboard.add(InlineKeyboardButton(name, callback_data=f"choose_{key}_{action}"))
     
-    keyboard.add(InlineKeyboardButton("🔙 رجوع", callback_data="admin"))
+    keyboard.add(InlineKeyboardButton("رجوع", callback_data="admin"))
     return keyboard
 
 # ==================== المتغيرات العامة ====================
@@ -351,7 +351,7 @@ def callback_handler(call):
         # ===== القوائم العامة =====
         if call.data == "main":
             bot.edit_message_text(
-                "🎓 القائمة الرئيسية",
+                "القائمة الرئيسية",
                 chat_id,
                 message_id,
                 reply_markup=main_menu()
@@ -359,7 +359,7 @@ def callback_handler(call):
         
         elif call.data == "subjects":
             bot.edit_message_text(
-                "📚 اختر المادة التي تريدها:",
+                "اختار المادة الي تريدها:",
                 chat_id,
                 message_id,
                 reply_markup=subjects_menu()
