@@ -199,16 +199,18 @@ def get_stats():
             SELECT 
                 COUNT(CASE WHEN file_type = 'lecture' THEN 1 END) as lectures,
                 COUNT(CASE WHEN file_type = 'summary' THEN 1 END) as summaries,
-                COUNT(CASE WHEN file_type = 'assignment' THEN 1 END) as assignments
+                COUNT(CASE WHEN file_type = 'assignment' THEN 1 END) as assignments,
+                COUNT(CASE WHEN file_type = 'random' THEN 1 END) as randoms
             FROM files 
             WHERE subject_key = %s
         ''', (subject_key,))
         
-        lectures, summaries, assignments = cur.fetchone()
+        lectures, summaries, assignments, randoms = cur.fetchone()
         stats[subject_name] = {
             'lectures': lectures or 0,
             'summaries': summaries or 0,
-            'assignments': assignments or 0
+            'assignments': assignments or 0,
+            'randoms': randoms or 0
         }
     
     cur.execute('SELECT COUNT(*) FROM schedule')
@@ -262,7 +264,8 @@ def subject_menu(subject_id):
         InlineKeyboardButton("📚 محاضرات", callback_data=f"show_{subject_id}_lecture"),
         InlineKeyboardButton("📝 ملخصات", callback_data=f"show_{subject_id}_summary"),
         InlineKeyboardButton("📋 واجبات", callback_data=f"show_{subject_id}_assignment"),
-        InlineKeyboardButton("رجوع", callback_data="subjects")
+        InlineKeyboardButton("🎲 عشوائيات", callback_data=f"show_{subject_id}_random"),
+        InlineKeyboardButton("🔙 رجوع", callback_data="subjects")
     ]
     keyboard.add(*buttons)
     return keyboard
@@ -275,6 +278,7 @@ def admin_menu():
         InlineKeyboardButton("📤 رفع محاضرة", callback_data="up_lecture"),
         InlineKeyboardButton("📤 رفع ملخص", callback_data="up_summary"),
         InlineKeyboardButton("📤 رفع واجب", callback_data="up_assignment"),
+        InlineKeyboardButton("🎲 رفع عشوائيات", callback_data="up_random"),
         InlineKeyboardButton("📊 الإحصائيات", callback_data="stats"),
         InlineKeyboardButton("رجوع", callback_data="main")
     ]
@@ -299,9 +303,30 @@ def subject_choice_menu(action):
     keyboard.add(InlineKeyboardButton("رجوع", callback_data="admin"))
     return keyboard
 
+def filename_choice_menu(temp_file_id, original_name, subject_id, file_type, caption):
+    """قائمة اختيار اسم الملف"""
+    keyboard = InlineKeyboardMarkup(row_width=2)
+    buttons = [
+        InlineKeyboardButton("✏️ تغيير الاسم", callback_data=f"rename_{temp_file_id}"),
+        InlineKeyboardButton("✅ حفظ بهذا الاسم", callback_data=f"keep_{temp_file_id}")
+    ]
+    keyboard.add(*buttons)
+    
+    # تخزين معلومات الملف مؤقتاً
+    temp_file_info[temp_file_id] = {
+        'file_id': temp_file_id,
+        'original_name': original_name,
+        'subject_id': subject_id,
+        'file_type': file_type,
+        'caption': caption
+    }
+    
+    return keyboard
+
 # ==================== المتغيرات العامة ====================
 
 user_state = {}
+temp_file_info = {}  # تخزين مؤقت للملفات قبل الحفظ
 current_user_id = None
 
 # ==================== الأوامر ====================
@@ -424,7 +449,8 @@ def callback_handler(call):
             type_names = {
                 'lecture': 'محاضرات',
                 'summary': 'ملخصات',
-                'assignment': 'واجبات'
+                'assignment': 'واجبات',
+                'random': 'عشوائيات'
             }
             
             files = get_files(subject_id, file_type)
@@ -498,6 +524,15 @@ def callback_handler(call):
                     parse_mode='Markdown'
                 )
             
+            elif call.data == "up_random":
+                bot.edit_message_text(
+                    "📤 **رفع عشوائيات المادة**\n\nاختر المادة:",
+                    chat_id,
+                    message_id,
+                    reply_markup=subject_choice_menu('random'),
+                    parse_mode='Markdown'
+                )
+            
             elif call.data.startswith("choose_"):
                 parts = call.data.split("_")
                 subject_id = parts[1]
@@ -514,7 +549,8 @@ def callback_handler(call):
                 type_names = {
                     'lecture': 'المحاضرة',
                     'summary': 'الملخص',
-                    'assignment': 'الواجب'
+                    'assignment': 'الواجب',
+                    'random': 'عشوائيات المادة'
                 }
                 
                 bot.edit_message_text(
@@ -538,18 +574,74 @@ def callback_handler(call):
                 stats_text = "📊 **إحصائيات البوت:**\n\n"
                 
                 for subject_name, counts in stats.items():
-                    total = counts['lectures'] + counts['summaries'] + counts['assignments']
+                    total = counts['lectures'] + counts['summaries'] + counts['assignments'] + counts['randoms']
                     total_files += total
                     
                     stats_text += f"**{subject_name}:**\n"
                     stats_text += f"  📚 محاضرات: {counts['lectures']}\n"
                     stats_text += f"  📝 ملخصات: {counts['summaries']}\n"
-                    stats_text += f"  📋 واجبات: {counts['assignments']}\n\n"
+                    stats_text += f"  📋 واجبات: {counts['assignments']}\n"
+                    stats_text += f"  🎲 عشوائيات: {counts['randoms']}\n\n"
                 
                 stats_text += f"**📁 إجمالي الملفات:** {total_files}\n"
                 stats_text += f"**📅 الجدول:** {'✅ موجود' if has_schedule else '❌ غير موجود'}"
                 
                 bot.send_message(chat_id, stats_text, parse_mode='Markdown', reply_markup=admin_menu())
+            
+            # ===== معالجة اختيار اسم الملف =====
+            elif call.data.startswith("rename_"):
+                temp_id = call.data[7:]
+                if temp_id in temp_file_info:
+                    bot.send_message(
+                        chat_id,
+                        "✏️ **أرسل الاسم الجديد للملف** (بدون امتداد الملف)\nمثال: محاضرة_1_الفصل_الثاني",
+                        parse_mode='Markdown'
+                    )
+                    user_state[chat_id] = {
+                        'action': 'waiting_for_filename',
+                        'temp_id': temp_id
+                    }
+            
+            elif call.data.startswith("keep_"):
+                temp_id = call.data[5:]
+                if temp_id in temp_file_info:
+                    info = temp_file_info[temp_id]
+                    
+                    # حفظ الملف بالاسم الأصلي
+                    if save_file(info['subject_id'], info['file_type'], info['original_name'], info['file_id'], info['caption']):
+                        type_names = {
+                            'lecture': 'المحاضرة',
+                            'summary': 'الملخص',
+                            'assignment': 'الواجب',
+                            'random': 'عشوائيات المادة'
+                        }
+                        
+                        subject_names = {
+                            'prog2': '💻 Computer Programming II',
+                            'business': '📊 Computer Applications in Business',
+                            'fundamentals': '🖥️ Computer Fundamentals',
+                            'discrete': '🔢 Discrete Structures',
+                            'arabic': '📖 Arabic Language'
+                        }
+                        
+                        bot.send_message(
+                            chat_id,
+                            f"✅ **تم حفظ {type_names[info['file_type']]} بنجاح!**\n"
+                            f"📁 المادة: {subject_names.get(info['subject_id'], info['subject_id'])}\n"
+                            f"📄 الملف: {info['original_name']}",
+                            parse_mode='Markdown',
+                            reply_markup=admin_menu()
+                        )
+                        
+                        # مسح البيانات المؤقتة
+                        del temp_file_info[temp_id]
+                    else:
+                        bot.send_message(
+                            chat_id,
+                            "❌ **فشل في حفظ الملف**",
+                            parse_mode='Markdown',
+                            reply_markup=admin_menu()
+                        )
     
     except Exception as e:
         print(f"خطأ في معالجة الزر: {e}")
@@ -606,46 +698,79 @@ def handle_files(message):
                 parse_mode='Markdown',
                 reply_markup=admin_menu()
             )
+        # مسح الحالة
+        del user_state[chat_id]
     
     # ===== حفظ محتوى المواد =====
     elif isinstance(state, dict) and state.get('action') == 'upload':
         subject_id = state['subject']
-        file_type = state['type']  # lecture, summary, assignment
+        file_type = state['type']  # lecture, summary, assignment, random
         
-        type_names = {
-            'lecture': 'المحاضرة',
-            'summary': 'الملخص',
-            'assignment': 'الواجب'
-        }
+        # إظهار خيارات اسم الملف
+        temp_id = f"{chat_id}_{datetime.now().timestamp()}"
+        bot.send_message(
+            chat_id,
+            f"📄 **اسم الملف الأصلي:** {file_name}\n\nهل تريد حفظ الملف بهذا الاسم أم تغييره؟",
+            parse_mode='Markdown',
+            reply_markup=filename_choice_menu(temp_id, file_name, subject_id, file_type, caption)
+        )
         
-        subject_names = {
-            'prog2': '💻 Computer Programming II',
-            'business': '📊 Computer Applications in Business',
-            'fundamentals': '🖥️ Computer Fundamentals',
-            'discrete': '🔢 Discrete Structures',
-            'arabic': '📖 Arabic Language'
-        }
-        
-        # حفظ الملف في قاعدة البيانات
-        if save_file(subject_id, file_type, file_name, file_id, caption):
-            bot.reply_to(
-                message,
-                f"✅ **تم حفظ {type_names[file_type]} بنجاح!**\n"
-                f"📁 المادة: {subject_names.get(subject_id, subject_id)}\n"
-                f"📄 الملف: {file_name}",
-                parse_mode='Markdown',
-                reply_markup=admin_menu()
-            )
-        else:
-            bot.reply_to(
-                message,
-                f"❌ **فشل في حفظ {type_names[file_type]}**",
-                parse_mode='Markdown',
-                reply_markup=admin_menu()
-            )
+        # مسح الحالة
+        del user_state[chat_id]
     
-    # مسح الحالة
-    if chat_id in user_state:
+    # ===== استقبال اسم الملف الجديد =====
+    elif isinstance(state, dict) and state.get('action') == 'waiting_for_filename':
+        temp_id = state.get('temp_id')
+        new_filename = message.text.strip()
+        
+        if temp_id in temp_file_info:
+            info = temp_file_info[temp_id]
+            
+            # إضافة الامتداد المناسب
+            if '.' in info['original_name']:
+                extension = info['original_name'].split('.')[-1]
+                if '.' not in new_filename:
+                    new_filename = f"{new_filename}.{extension}"
+            
+            # حفظ الملف بالاسم الجديد
+            if save_file(info['subject_id'], info['file_type'], new_filename, info['file_id'], info['caption']):
+                type_names = {
+                    'lecture': 'المحاضرة',
+                    'summary': 'الملخص',
+                    'assignment': 'الواجب',
+                    'random': 'عشوائيات المادة'
+                }
+                
+                subject_names = {
+                    'prog2': '💻 Computer Programming II',
+                    'business': '📊 Computer Applications in Business',
+                    'fundamentals': '🖥️ Computer Fundamentals',
+                    'discrete': '🔢 Discrete Structures',
+                    'arabic': '📖 Arabic Language'
+                }
+                
+                bot.send_message(
+                    chat_id,
+                    f"✅ **تم حفظ {type_names[info['file_type']]} بنجاح!**\n"
+                    f"📁 المادة: {subject_names.get(info['subject_id'], info['subject_id'])}\n"
+                    f"📄 الملف: {new_filename}",
+                    parse_mode='Markdown',
+                    reply_markup=admin_menu()
+                )
+                
+                # مسح البيانات المؤقتة
+                del temp_file_info[temp_id]
+            else:
+                bot.send_message(
+                    chat_id,
+                    "❌ **فشل في حفظ الملف**",
+                    parse_mode='Markdown',
+                    reply_markup=admin_menu()
+                )
+        else:
+            bot.send_message(chat_id, "❌ حدث خطأ، الرجاء المحاولة مرة أخرى", reply_markup=admin_menu())
+        
+        # مسح الحالة
         del user_state[chat_id]
 
 # ==================== تشغيل البوت ====================
