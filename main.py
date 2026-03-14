@@ -313,9 +313,9 @@ def start(message):
     current_user_id = message.from_user.id
     
     welcome_text = f"""
-🎓 مرحباً بك {message.from_user.first_name} في بوت كلية نظم المعلومات
+🎓 حياك🤠 {message.from_user.first_name} 
 
-اختر ما تريد من القائمة:
+اختار :
     """
     bot.send_message(
         message.chat.id,
@@ -335,7 +335,7 @@ def admin(message):
     else:
         bot.send_message(
             message.chat.id,
-            "❌ هذا الأمر للأدمن فقط!"
+            "❌لالا هذا بس الي 🤨!"
         )
 
 # ==================== معالجة الأزرار ====================
