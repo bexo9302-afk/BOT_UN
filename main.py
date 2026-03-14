@@ -391,20 +391,10 @@ def callback_handler(call):
         
         elif call.data == "help":
             help_text = """
-❓ **مساعدة البوت**
+❓ **مساعدة**
 
-📚 **المواد الدراسية:**
-   اختر المادة ثم:
-   • 📚 محاضرات
-   • 📝 ملخصات
-   • 📋 واجبات
+📚 **ماكو مساعده دبر روحك. بروحك🙄🤨:**
 
-📅 **الجدول الدراسي:**
-   يعرض الجدول إذا كان متوفر
-
-⚙️ **للمشرف:** استخدم /admin للدخول للوحة التحكم
-
-للتواصل: @YourChannel
             """
             bot.send_message(chat_id, help_text, parse_mode='Markdown', reply_markup=main_menu())
         
